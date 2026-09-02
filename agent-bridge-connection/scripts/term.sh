@@ -10,7 +10,8 @@ out=""
 for i in $(seq 1 40); do
   chunk=$(timeout 0.5 dd bs=4096 count=1 <&3 2>/dev/null)
   out+="$chunk"
-  [[ "$out" == *"__MARK_END__"* ]] && break
+  # 结束标记必须独占一行（U-Boot 会回显命令行，子串匹配会提前退出）
+  [[ "$out" == *$'\n'"__MARK_END__"* || "$out" == *$'\r'"__MARK_END__"* ]] && break
 done
 printf '%s\n' "$out"
 exec 3<&-

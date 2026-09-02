@@ -3,7 +3,7 @@ name: agent-bridge-connection
 description: 通过 Serial Port Terminal 插件的 AgentBridge（本地 TCP 端口）连接嵌入式设备的串口终端，建立通信、执行命令并读取输出。当需要与串口设备建立 AgentBridge 连接、了解命令收发/排错机制时使用。
 metadata:
   author: ziqiang.zhu
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # AgentBridge 连接（基础）
@@ -38,15 +38,25 @@ AgentBridge 由 VS Code 插件 **Serial Port Terminal** 提供，插件内置三
 
 ## 访问方法
 
-### 方法一：使用随附脚本（推荐）
+**先选对脚本**：Linux/macOS 的 bash 支持 `/dev/tcp`，可直接用 `term.sh`；Windows 的 Gow/Git Bash 通常**不支持** `/dev/tcp`（`term.sh` 会以退出码 1 静默失败），请改用 `term.js`。
+
+### 方法一：term.sh（Linux/macOS 或支持 /dev/tcp 的 bash）
 
 ```bash
 bash .agents/skills/agent-bridge-connection/scripts/term.sh 'echo __MARK_BEGIN__; <命令>; echo __MARK_END__'
 ```
 
-脚本会向 `127.0.0.1:2000` 发送命令（自动加 `\r`），持续读取输出直到遇到 `__MARK_END__`。
+脚本会向 `127.0.0.1:2000` 发送命令（自动加 `\r`），持续读取输出直到遇到独占一行的 `__MARK_END__`。
 
-### 方法二：手动 TCP 连接（备用）
+### 方法二：term.js（Windows，推荐；需本机 Node.js）
+
+```bash
+node .agents/skills/agent-bridge-connection/scripts/term.js '<命令>'
+```
+
+`term.js` 会自动用 `__MARK_BEGIN__`/`__MARK_END__` 包住命令、自动加 `\r`，先排空残留输出，读到「独占一行的 `__MARK_END__`」后停止。用 `node -v` 确认 Node.js 可用。
+
+### 方法三：手动 TCP 连接（备用）
 
 ```bash
 exec 3<>/dev/tcp/127.0.0.1/2000 || exit 1
@@ -57,15 +67,15 @@ out=""
 for i in $(seq 1 40); do
   chunk=$(timeout 0.5 dd bs=4096 count=1 <&3 2>/dev/null)
   out+="$chunk"
-  [[ "$out" == *"__MARK_END__"* ]] && break
+  [[ "$out" == *$'\n'"__MARK_END__"* || "$out" == *$'\r'"__MARK_END__"* ]] && break
 done
 printf '%s\n' "$out"
 exec 3<&-
 ```
 
-### 方法三
+### 方法四
 
-若前两种都不可用，可自行尝试其它可行方案（务必遵守下方注意事项）。
+若前几种都不可用，可自行尝试其它可行方案（务必遵守下方注意事项，尤其是「标记回显」陷阱）。
 
 ## 关键注意事项
 
@@ -78,18 +88,23 @@ exec 3<&-
 7. **敏感输入**：出现 `login:`/密码提示时，让用户在 VS Code Terminal 手动输入，不要经 TCP 代输。
 8. **设备环境**：目标板通常无 Python，用纯 Bash。
 9. **字符流已去 ANSI**：AgentBridge 转发给客户端的字符流已剥离 ANSI 转义序列，输出中通常没有颜色码/控制序列，无需 `cat -v` 处理。
+10. **标记回显陷阱**：U-Boot 会回显整条命令行，因此命令行里的 `echo __MARK_END__` 会让 `__MARK_END__` 在命令真正执行前就出现在输出里。检测结束标记时**必须匹配「独占一行的 `__MARK_END__`」**（即其前面是 `\n` 或 `\r`），不要用简单的子串 `includes`/`== *"__MARK_END__"*`，否则会提前结束读取、只拿到半截输出。
 
 ## 通用执行模式
 
 1. 构造带标记的命令：`echo __MARK_BEGIN__; <命令>; echo __MARK_END__`；
-2. 用 `term.sh` 执行，从输出中截取两个标记之间的内容；
-3. 输出为空或不完整时，参考下方故障排查。
+2. 用 `term.sh`（Linux）或 `term.js`（Windows）执行，从输出中截取两个标记之间的内容；
+3. **结束标记必须按「独占一行」匹配**（见注意事项第 10 条），否则在回显命令行的终端（如 U-Boot）上会提前结束；
+4. 输出为空或不完整时，参考下方故障排查。
 
 ## 故障排查
 
 | 问题 | 可能原因 | 解决方法 |
 |-----|-----|-----|
 | Connection refused | AgentBridge 未启动 / 端口错误 | 提示用户开启，确认端口 |
+| `term.sh` 退出码 1、无输出 | Windows 的 Gow/Git Bash 不支持 `/dev/tcp` | 改用 `term.js` |
+| 输出只到 `__MARK_BEGIN__` 就停止 | 结束标记被命令行回显提前触发 | 改为匹配「独占一行」的 `__MARK_END__`（term.js 已处理）|
 | 无输出 / 不完整 | 超时或截断 | 增加循环次数或拆分命令 |
 | 命令执行后卡死 | 未发 `\r` 或命令等待输入 | 确保 `\r` 结尾，避免交互式命令 |
 | 出现登录提示 | 设备未自动登录 | 提示用户在 Terminal 手动登录 |
+| 复位/重连后收到旧 boot 残留 | 上一次连接断开后设备仍在后台继续 boot | 先发 `\r` 确认是否停在提示符再操作 |
