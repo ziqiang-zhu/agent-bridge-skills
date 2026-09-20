@@ -3,7 +3,7 @@ name: agent-bridge-embedded-linux
 description: 当 AgentBridge 已连接的目标是嵌入式 Linux 设备（已进入 shell）时，提供常用 Linux 诊断与操作命令：系统/内核、CPU、内存、存储、USB、网络、I2C/SPI、GPIO、进程等。连接与收发机制见 agent-bridge-connection。
 metadata:
   author: ziqiang.zhu
-  version: 1.0.0
+  version: 1.0.1
 ---
 
 # AgentBridge 嵌入式 Linux 操作
@@ -56,5 +56,6 @@ bash .agents/skills/agent-bridge-connection/scripts/term.sh 'echo __MARK_BEGIN__
 - 目标板通常为 **BusyBox** 环境：无 Python，命令集精简，`watch`/`strace`/`lsof` 可能不存在；
 - 命令以 `\r` 结尾（`term.sh` 已处理）；
 - 输出字符流已由 AgentBridge 剥离 ANSI 转义序列；
+- 输出按行推送，行尾无换行的提示符会在静默 200ms 后补发——等待提示符时预留 ≥300ms 再判定输出结束；
 - 交互式命令（如 `top`、`vi`）不适合经 TCP 代跑，改用 `top -n 1` 等批处理形态。
 - 若需在设备上创建并执行脚本，可先在本地写好脚本内容，使用 `echo -e` 通过 AgentBridge 写入设备上的 /tmp 位置，再赋予执行权限并执行。

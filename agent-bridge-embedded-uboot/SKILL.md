@@ -3,7 +3,7 @@ name: agent-bridge-embedded-uboot
 description: 当 AgentBridge 已连接的目标处于 U-Boot 引导终端（未启动内核）时，提供常用 U-Boot 操作命令：环境变量、内存读写、存储分区、网络启动、镜像烧写、启动内核等。连接与收发机制见 agent-bridge-connection。
 metadata:
   author: ziqiang.zhu
-  version: 1.1.0
+  version: 1.1.1
 ---
 
 # AgentBridge 嵌入式 U-Boot 操作
@@ -111,6 +111,7 @@ node .agents/skills/agent-bridge-connection/scripts/term.js 'printenv'
 - **危险操作谨慎**：`erase`/`write`（nand/nor/sf）会破坏存储内容，执行前向用户确认；
 - `boot`/`bootm` 会启动内核并脱离 U-Boot，之后应改用 `agent-bridge-embedded-linux`；
 - 输出字符流已由 AgentBridge 剥离 ANSI 转义序列；
+- 输出按行推送；倒计时等无换行内容会随静默 200ms 分段补发——「Hit any key」事件脚本检测到关键字即应尽快写键，等待 `=>` 提示符时预留 ≥300ms 再判定；
 - `reset` 复位后 AgentBridge 的 TCP 连接**不会断开**，后续输出仍经同一连接回传，无需重连；
 - 上一次连接超时/断开后，设备可能仍在后台继续 boot（如 TFTP 下载 zImage），下次连接应先发 `\r` 确认是否停在 `=>`，再执行 `reset` 等命令；否则命令可能被忽略或排队；
 - 自动启动倒计时提示 `Hit any key to stop autoboot: 5 4 3 2 1 0`（数字为 bootdelay），期间任意键可中断并停在 U-Boot；

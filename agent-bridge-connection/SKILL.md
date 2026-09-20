@@ -3,7 +3,7 @@ name: agent-bridge-connection
 description: 通过 Serial Port Terminal 插件的 AgentBridge（本地 TCP 端口）连接嵌入式设备的串口终端，建立通信、执行命令并读取输出。当需要与串口设备建立 AgentBridge 连接、了解命令收发/排错机制时使用。
 metadata:
   author: ziqiang.zhu
-  version: 1.2.1
+  version: 1.2.2
 ---
 
 # AgentBridge 连接（基础）
@@ -147,6 +147,7 @@ exec 3<&-
 8. **设备环境**：目标板通常无 Python，用纯 Bash。
 9. **字符流已去 ANSI**：AgentBridge 转发给客户端的字符流已剥离 ANSI 转义序列，输出中通常没有颜色码/控制序列，无需 `cat -v` 处理。
 10. **标记回显陷阱**：U-Boot 会回显整条命令行，因此命令行里的 `echo __MARK_END__` 会让 `__MARK_END__` 在命令真正执行前就出现在输出里。检测结束标记时**必须匹配「独占一行的 `__MARK_END__`」**（即其前面是 `\n` 或 `\r`），不要用简单的子串 `includes`/`== *"__MARK_END__"*`，否则会提前结束读取、只拿到半截输出。
+11. **输出按行推送、空闲补发**：AgentBridge 按行剥离并转发输出；行尾无换行的内容（shell/U-Boot 提示符等）会在静默 200ms 后自动补发。等待提示符或最终回显时，预留 ≥300ms 静默窗口再判定输出结束。
 
 ## 通用执行模式
 
