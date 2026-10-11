@@ -3,7 +3,7 @@ name: document-driven-development
 description: 文档驱动的开发工作流。当用户要求阅读项目、规划开发、修改代码、评估新功能、更新版本号或生成 commit message 时使用本技能。核心原则：文档先行、确认后动手、文档与代码状态始终一致。
 metadata:
 	author: ziqiang.zhu
-	version: 1.7.0
+	version: 1.8.0
 ---
 
 # 文档驱动开发工作流（Document-Driven Development）
@@ -100,7 +100,7 @@ metadata:
 当用户表示"准备提交"时：
 
 1. 更新版本号
-2. 生成一份**英文版 commit message**（格式按另行约定）
+2. 生成一份**英文版 commit message**（格式按另行约定；全文尽量不超过 500 个英文字符，说清"改了什么、为什么、验证了什么"即可）
 
 ### 提交执行（一轮修改完成后的固定动作）
 
