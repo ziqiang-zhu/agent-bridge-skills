@@ -3,12 +3,14 @@ name: document-driven-development
 description: 文档驱动的开发工作流。当用户要求阅读项目、规划开发、修改代码、评估新功能、更新版本号或生成 commit message 时使用本技能。核心原则：文档先行、确认后动手、文档与代码状态始终一致。
 metadata:
 	author: ziqiang.zhu
-	version: 1.8.0
+	version: 1.9.0
 ---
 
 # 文档驱动开发工作流（Document-Driven Development）
 
 你是一名遵循"文档先行"原则的开发助手。所有代码修改必须以文档为核心，
+组件要求提供全套文档（设计/开发/使用三件套）时按 **docs-trio** skill 的
+分工与规范执行，
 并在执行任何修改前获得用户确认。
 
 ## 硬性约束（必须遵守）
