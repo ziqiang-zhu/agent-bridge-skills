@@ -3,7 +3,7 @@ name: agent-bridge-nfs-reinstall
 description: 当目标板从 NFS root（宿主机 tftp 目录）启动、且需要删除或整体重装该目录时使用：先重启平台并在 autoboot 倒计时内停在 U-Boot，宿主机按日期+时间改名备份旧 sysroot 后以普通用户执行 make nfs，再用 run netboot 重新引导。增量重部署（make install 覆盖）不走本流程，见文内边界说明。
 metadata:
   author: ziqiang.zhu
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # NFS root 重装流程（先停 U-Boot，再动服务端）
@@ -35,39 +35,33 @@ metadata:
 
 ## 命令序列
 
-第 1、2 步是时序联动，`term.sh` 的一次性收发不适用，用原始连接边读边按键（同机用 `/dev/tcp`；跨主机把 `HOST` 换成宿主机 IP，见 agent-bridge-connection 的「跨主机访问」）。`bootdelay=1` 时「发重启命令 → 再按键」往往来不及，**后台按键循环要和重启命令同时挂着**：
+第 1、2 步是时序联动，**优先直接用 agent-bridge-connection 附带的拦停脚本**（先判态再动作：板子已在 U-Boot 则原样返回；在 shell 才发重启；回车间隔 100ms、拦到 `=>` 立即停手；systemd 停服务/倒计时/到提示符逐态实时上报，全程可观察）：
 
 ```bash
-HOST=127.0.0.1   # 跨主机：宿主机 IP
-exec 3<>/dev/tcp/$HOST/2000 || exit 1
-timeout 0.3 dd bs=4096 count=1 <&3 >/dev/null 2>&1   # 排空残留
-( while :; do printf '\r' >&3; sleep 0.02; done ) &  # 持续送键：关机阶段打到控制台无害
-SPAM=$!
-printf 'systemctl reboot\r' >&3
-out=""
-for i in $(seq 1 600); do
-    out+=$(timeout 0.15 dd bs=1 count=8192 <&3 2>/dev/null)
-    [[ "$out" == *'=> '* ]] && break
-done
-kill $SPAM 2>/dev/null
-exec 3<&-
-echo "$out" | tr -d '\r' | tail -5   # 应停在 => 提示符
+bash .agents/skills/agent-bridge-connection/scripts/catch-uboot.sh <宿主机IP>
+# 退出码 0 = 已停在 U-Boot；2 = 板子不在已知 shell（脚本拒绝盲目重启，需人工处理）
 ```
 
-> 事件式写法（监听 `Hit any key to stop autoboot` 后精确按键）见 agent-bridge-embedded-uboot 的「修改 bootdelay 并重启后停留在 U-Boot」；上面的连续回车更简单，效果相同。板子已跑过一轮而无人在盯时，注意 kernel 起来后按键会打到 getty，属无害噪声。
+跨主机时传宿主机 IP（定位方法见 agent-bridge-connection 的「跨主机访问」快速路径）。手写等价序列时遵守该 skill「事件式等待」的四条纪律——尤其注意：连发间隔用 100ms（`bootdelay=1` 足够，20ms 只会刷屏）、匹配「独占一行」的 `=>` 立即 break、循环内对输出做状态上报。板子已跑过一轮而无人在盯时，注意 kernel 起来后按键会打到 getty，属无害噪声。
 
-第 4 步 `run netboot` 后内核接管、输出超出 term 脚本约 20 秒的读循环上限，抓完整启动日志用长循环：
+> 事件式写法（监听 `Hit any key to stop autoboot` 后精确按键）见 agent-bridge-embedded-uboot 的「修改 bootdelay 并重启后停留在 U-Boot」。
+
+第 4 步 `run netboot` 后内核接管、输出超出 term 脚本约 20 秒的读循环上限，抓启动日志用长循环——**读到登录提示符即收尾**，固定时长只作兜底：
 
 ```bash
 HOST=127.0.0.1; DUR=120
 exec 3<>/dev/tcp/$HOST/2000 || exit 1
 printf 'run netboot\r' >&3
-END=$((SECONDS+DUR))
+out=""; END=$((SECONDS+DUR))
 while [ $SECONDS -lt $END ]; do
-    timeout 1 dd bs=1 count=16384 <&3 2>/dev/null
+    out+=$(timeout 1 dd bs=512 count=32 <&3 2>/dev/null | tr -d '\r')
+    printf '%s' "$out" | grep -q 'root@' && break   # 登录提示符出现即收尾
 done
 exec 3<&-
+printf '%s\n' "$out" | tail -20
 ```
+
+dd 的读取参数用 `bs=512` 配 `count`（`bs=1` 是逐字节系统调用，日志刷屏时吞吐不足、读取滞后于设备输出）；过程观察与状态上报的纪律见 agent-bridge-connection 的「事件式等待」。
 
 ## 注意
 
