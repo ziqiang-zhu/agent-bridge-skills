@@ -1,14 +1,14 @@
 ---
-name: camphor-build
-description: Camphor 工作区的编译构建流程。当用户要求编译、构建项目、配置（menuconfig/defconfig）、构建或安装 sysroot、生成文档站（sphinx-docs）时使用本技能。提供 Makefile+Kconfig 驱动的完整命令序列，每步均含可直接执行的完整命令。
+name: camphora-build
+description: Camphora 工作区的编译构建流程。当用户要求编译、构建项目、配置（menuconfig/defconfig）、构建或安装 sysroot、生成文档站（sphinx-docs）时使用本技能。提供 Makefile+Kconfig 驱动的完整命令序列，每步均含可直接执行的完整命令。
 metadata:
 	author: ziqiang.zhu
 	version: 1.10.0
 ---
 
-# Camphor 编译构建流程
+# Camphora 编译构建流程
 
-本工作区（Camphor BSP，i.MX6ULL ALPHA V2.2）的构建由顶层 **Makefile**
+本工作区（Camphora BSP，i.MX6ULL ALPHA V2.2）的构建由顶层 **Makefile**
 （repo 从 `build/Makefile.top` 拷贝）驱动：**Kconfig 管配置，CMake 管构建**。
 构建目录为 `.binary/`。
 

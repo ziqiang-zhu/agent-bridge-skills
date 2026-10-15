@@ -3,7 +3,7 @@ name: agent-bridge-nfs-reinstall
 description: 当目标板从 NFS root（宿主机 tftp 目录）启动、且需要删除或整体重装该目录时使用：先重启平台并在 autoboot 倒计时内停在 U-Boot，宿主机按日期+时间改名备份旧 sysroot 后以普通用户执行 make nfs，再用 run netboot 重新引导。增量重部署（make install 覆盖）不走本流程，见文内边界说明。
 metadata:
   author: ziqiang.zhu
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # NFS root 重装流程（先停 U-Boot，再动服务端）
@@ -62,6 +62,24 @@ printf '%s\n' "$out" | tail -20
 ```
 
 dd 的读取参数用 `bs=512` 配 `count`（`bs=1` 是逐字节系统调用，日志刷屏时吞吐不足、读取滞后于设备输出）；过程观察与状态上报的纪律见 agent-bridge-connection 的「事件式等待」。
+
+## 并行编排：让子代理等待板子
+
+流程中的长等待段（重启后等引导完成、 ``run netboot`` 后等登录提示、部分安装后的整机重启） **不必让主代理原地阻塞** ：派一个 **后台子代理** 专职等待板子就绪，主代理并行继续其他工作（写代码/文档/构建其他目标），子代理完成时主代理会收到通知再回来做板端验证。
+
+- **做法** ：以 ``run_in_background`` 派 general-purpose 子代理，提示词 **自包含** （主代理不留上下文）：桥主机 IP、等待脚本（ ``term-host.sh`` 循环轮询，见下）、就绪标记（ ``root@Camphora`` 登录提示符）、超时上限与回报要求（成功/超时 + 最后输出）；
+- **串口独占（硬约束）** ：AgentBridge 共享同一条串口数据流——子代理等待期间主代理 **不得再开第二条串口连接** 做任何板端操作（并发读取会互相抢字节、命令互相穿插）；等待期内涉及板子的其他事务一并委托给该子代理；
+- **职责边界** ：子代理只判定"板子就绪"（提示符出现）， **业务验证仍由主代理执行** ；
+- 同样的等待段也出现在 running-test 的快速回路里（部分安装后整机重启取新内核/设备树），编排方式相同。
+
+子代理提示词模板：
+
+```text
+通过 bash .agents/skills/agent-bridge-connection/scripts/term-host.sh <桥主机IP>
+循环轮询板子串口（每次 sleep 3-5s），直到输出出现登录提示符 "root@Camphora"
+（或最长 <N> 秒超时）。不要向板子发送任何命令，只读。回报：就绪与否 + 最后
+10 行输出。工具与机制详见 .agents/skills/agent-bridge-connection/SKILL.md。
+```
 
 ## 注意
 

@@ -1,6 +1,6 @@
 ---
 name: thirdparty-build-guide
-description: 在 Camphor 构建系统中新增第三方库、修改第三方库构建逻辑时必用的操作指南。当用户要求"新增/接入一个第三方库"、"给某包加开关/选项/依赖"、"改某个包的 configure/build/install 步骤"、"第三方包装不进镜像/没被构建"时使用——即使用户只说"加个库"或"改一下构建"。阅读 thirdparty/build 与 build/modules/ThirdpartyBuild.cmake 后按本指南操作。
+description: 在 Camphora 构建系统中新增第三方库、修改第三方库构建逻辑时必用的操作指南。当用户要求"新增/接入一个第三方库"、"给某包加开关/选项/依赖"、"改某个包的 configure/build/install 步骤"、"第三方包装不进镜像/没被构建"时使用——即使用户只说"加个库"或"改一下构建"。阅读 thirdparty/build 与 build/modules/ThirdpartyBuild.cmake 后按本指南操作。
 metadata:
    version: 1.0.0
    author: ziqiang.zhu
