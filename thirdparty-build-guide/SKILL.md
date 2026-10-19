@@ -2,7 +2,7 @@
 name: thirdparty-build-guide
 description: 在 Camphora 构建系统中新增第三方库、修改第三方库构建逻辑时必用的操作指南。当用户要求"新增/接入一个第三方库"、"给某包加开关/选项/依赖"、"改某个包的 configure/build/install 步骤"、"第三方包装不进镜像/没被构建"时使用——即使用户只说"加个库"或"改一下构建"。阅读 thirdparty/build 与 build/modules/ThirdpartyBuild.cmake 后按本指南操作。
 metadata:
-   version: 1.0.0
+   version: 1.1.0
    author: ziqiang.zhu
 ---
 
@@ -20,9 +20,7 @@ metadata:
   - `thirdparty_prebuilt_add(pkg ...)`：预编译快照注册（从 `bsp/prebuilt/<pkg>` 直接安装）；
   - `add_to_build_group(<pkg> sysroot)` 由上述函数内部自动完成（目标进入 `sysroot-group`）。
 
-**两跳安装约定（最重要的机制）**：包的产物先由 `INSTALL_COMMAND` 暂存到 `STAGING_DIR`（`output/<pkg>/usr/...` 布局），再由 `INSTALL_COMMAND` 的最后一段执行
-`${CMAKE_COMMAND} -P ${BUILD_DIR}/scripts/copy_directory.cmake ${STAGING_DIR} "${THIRDPARTY_SYSROOT}"`
-折进**编译 sysroot**；随后 `sysroot-init` 组件随全量安装（`make install`/`make nfs`）把编译 sysroot 原样装进目标前缀。**漏掉第二跳 = 全量镜像里没有这个包**（真实事故：smiley-sans 字体首次接入即漏了它，手工组件安装验证侥幸通过、全量重装后字体消失）。
+**两跳安装（已机制化）**：包的产物先由 `INSTALL_COMMAND` 暂存到 `STAGING_DIR`（`output/<pkg>/usr/...` 布局）；**sysroot 折叠由模块注册的 fold 步骤自动承担**（`copy_directory.cmake` 将 staging 拷入编译 sysroot），`INSTALL_COMMAND` 里**不要再手写拷贝段**。sysroot 不可信：`Makefile.top` 在每次 `.config` 变更后全删重建 sysroot 并 touch 信号，fold 步骤依赖 sysroot 目录 mtime、自动整体重折叠（纯拷贝），重建/安装步骤仍由命令清单门控。随后 `sysroot-init` 组件随全量安装（`make install`/`make nfs`）把编译 sysroot 原样装进目标前缀。（历史事故：smiley-sans 首次接入漏了折叠段、全量重装后字体消失——该事故促成了本机制的机制化。）
 
 ## 场景一：新增第三方库
 
@@ -61,10 +59,8 @@ metadata:
        CONFIGURE_COMMAND ...
        BUILD_COMMAND ...
        INSTALL_COMMAND
-           ...（产物进 ${<PKG>_BINARY_DIR} 的 usr/ 布局）
-           COMMAND
-           ${CMAKE_COMMAND} -P ${BUILD_DIR}/scripts/copy_directory.cmake
-               ${<PKG>_BINARY_DIR} "${THIRDPARTY_SYSROOT}"
+           ...（产物进 ${<PKG>_BINARY_DIR} 的 usr/ 布局；sysroot 折叠由
+           fold 步骤自动完成，勿手写拷贝段）
    )
    ```
 
@@ -85,7 +81,7 @@ metadata:
 
 ## 陷阱清单（真实事故）
 
-- **漏第二跳**：只写 staging 拷贝、不折进编译 sysroot → 全量镜像缺包，且 `--component <pkg>` 手工验证侥幸通过掩盖问题。新包的 INSTALL_COMMAND 最后一段必须存在。
+- **staging 即终点**：`INSTALL_COMMAND` 只装 staging，sysroot 折叠由 fold 步骤机制化承担（依赖 sysroot 目录 mtime，每次 `.config` 变更后自动重折叠）——`INSTALL_COMMAND` 里不要再手写 copy_directory 拷贝段。
 - **假值常量**：CMake 里 `if(NOT VAR)` 对值 `"OFF"`/`"0"` 判假——判断"是否提供"用 `STREQUAL ""`/`DEFINED`（declare 函数内 MODIFIED=OFF 的处理就是为此）。
 - **正则误用**：对包名做 `MATCHES` 会把名字里的正则字符当语法（declare 的重复检测因此改用字面量比较）。
 - **CACHE 残留**：跨运行的注册表用 `GLOBAL PROPERTY`（每次 configure 重置），不用 `CACHE INTERNAL` 列表（永不失效，重复配置误报）。
