@@ -3,7 +3,7 @@ name: camphora-build
 description: Camphora 工作区的编译构建流程。当用户要求编译、构建项目、配置（menuconfig/defconfig）、构建或安装 sysroot、生成文档站（sphinx-docs）时使用本技能。提供 Makefile+Kconfig 驱动的完整命令序列，每步均含可直接执行的完整命令。
 metadata:
 	author: ziqiang.zhu
-	version: 1.10.0
+	version: 1.11.0
 ---
 
 # Camphora 编译构建流程
@@ -42,6 +42,10 @@ Cmake 动作；`.config` 变更后下一次 `make build`/`make all`/`make config
   目标（`%_defconfig`、`menuconfig`、`guiconfig`）会去启动该程序而非 make；
 - snap 安装的 cmake 拿不到程序名，表现为 `cmake --version` 打印 snap 版本、
   `cmake -E ...` 报 unknown flag。
+- Bash 工具是持久 shell，cwd 跨调用保留：每条命令以
+  `cd /home/ziqiang-zhu/linux/AgentWorkSpace &&` 开头或用绝对路径——cwd 残留在
+  子仓或已删目录时，相对路径与技能发现会失效（详见 agent-work-agreement 的
+  「工作目录纪律」）。
 
 执行时加两个覆盖参数即可（用户在真实终端不需要）：
 

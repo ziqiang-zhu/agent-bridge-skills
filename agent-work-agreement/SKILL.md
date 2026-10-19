@@ -2,7 +2,7 @@
 name: agent-work-agreement
 description: 本仓库的人机协作工作约定：文档先行、先确认后修改的开发流程，版本号与 CHANGELOG 规则，提交准备与执行方式（commit 必须经用户明确确认，禁止自行决定提交；message 长度约束），以及禁用的 git 命令。凡在本仓库被要求修改代码、新增功能、编写设计、评估新特性、更新版本号或准备提交时，先加载并遵守本约定——即使用户没有明确提到"约定"或"流程"。
 metadata: 
-   version: 1.4.0
+   version: 1.5.0
    author: ziqiang.zhu
 ---
 
@@ -52,3 +52,14 @@ git branch / checkout / push / pull / rebase / reset / cherry-pick / remote
 ```
 
 分支、历史与远程是用户的领地：创建、切换、改写、发布提交的决定权完全在用户手中。`git commit` 是唯一例外——**仅在用户对本次提交给出明确确认后执行，禁止自行决定提交**（见"提交准备"：对方案的确认不等于对提交的确认）； `--amend` 仅在用户**明确要求**改写某笔提交时使用（如修正 message），其余改写历史的操作（`rebase` 等）与 `--no-verify` 一律禁止。允许的 git 操作为只读命令（`status` / `diff` / `log` / `show` 等）、暂存（`add`）与获明确确认后的 `commit`。
+
+## 工作目录纪律
+
+Bash 工具是跨调用持久的 shell：cwd 在命令之间保留，只有在命令因 cwd 失效而报错后才会被被动重置回工作区根。以下纪律为硬性要求——违反曾造成技能无法加载、git 命令失败与成串的误诊断：
+
+- 每条 Bash 命令以 `cd /home/ziqiang-zhu/linux/AgentWorkSpace &&` 开头，或全程使用绝对路径；**禁止依赖上一条命令遗留的 cwd**；
+- 三类已发生的事故形态（理解规则的为什么）：
+  - cwd 停在**已删除的目录**（如用完即删的构建沙箱）：相对路径全部失败，直到被动重置；
+  - cwd 停在**嵌套 git 仓**（`build`/`bsp`/`system`/`thirdparty`/`.agents/skills` 均为独立仓，而工作区根没有 `.git`）：git 命令报"不是 git 仓库"；**Skill 工具的技能发现同样跟随 shell cwd、向上走查止于最近的 git 仓根**——工作区的 `.agents/skills` 随之不可达，技能报 "Skill not found"（2026-10-19 的 roadmap-write 悬案即此根因）；
+  - 路径错误被 `2>/dev/null` 或 `grep -c` 之类的输出过滤吞掉，呈现为"空结果"，被误读为"文件不存在"，把排查引向错误方向；
+- 高危时刻（cwd 最易残留、显式归位后再继续）：`rm -rf` 沙箱目录之后、子仓 `git commit` 之后、跨用户轮次接续工作之前。
