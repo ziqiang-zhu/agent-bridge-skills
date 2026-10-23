@@ -3,7 +3,7 @@ name: agent-bridge-connection
 description: 通过 Serial Port Terminal 插件的 AgentBridge（本地 TCP 端口）连接嵌入式设备的串口终端，建立通信、执行命令并读取输出。当需要与串口设备建立 AgentBridge 连接、了解命令收发/排错机制时使用。
 metadata:
   author: ziqiang.zhu
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # AgentBridge 连接（基础）
@@ -180,6 +180,17 @@ for ip in <候选IP…>; do timeout 3 bash -c "exec 3<>/dev/tcp/$ip/2000" 2>/dev
 2. 用 `term.sh`（同机 Linux/macOS）、`term.js`（同机 Windows）或 `term-host.sh`（跨主机）执行，从输出中截取两个标记之间的内容；
 3. **结束标记必须按「独占一行」匹配**（见注意事项第 10 条），否则在回显命令行的终端（如 U-Boot）上会提前结束；
 4. 输出为空或不完整时，参考下方故障排查。
+
+## 文件传输：分块 base64
+
+串口交互 shell 的行编辑器对单行长度有限制（实测约 1 KiB，超长命令被截断：命令行中段折断、出现续行提示、执行不完整）。向板上传文件不走 scp/网络，用分块 base64：
+
+1. 宿主：`base64 -w0 <文件> > /tmp/x.b64`，按 **600 字符** 分块（实测安全余量）；
+2. 逐块下发：`printf '%s' '<块>' >> /tmp/x.b64`（每块一条 term 命令）；
+3. 板上：`base64 -d /tmp/x.b64 > <目标路径>`，需要执行则 `chmod +x`；
+4. 校验：板上 `sha1sum <目标>`，宿主 `base64 -d /tmp/x.b64 | sha1sum`，两边一致才算传完。
+
+下载（板→宿主）反向同理：板上 `base64 <文件>` 输出按行收，宿主拼接后解码——大文件走网络通道（NFS/优盘），串口只适合 KB 级小文件。
 
 ## 事件式等待：重启拦停、长启动日志
 
