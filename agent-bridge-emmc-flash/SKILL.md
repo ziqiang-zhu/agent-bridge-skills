@@ -80,7 +80,7 @@ cat /tmp/job.log
 
 | 现象 | 根因与处置 |
 |---|---|
-| 生成器/服务日志记 "succeeded" 但毫无效果 | systemd 以精简环境调生成器，PATH 不含 busybox applet 目录（板上报 `cat: not found`）——生成器脚本内 **不得经 PATH 解析外部命令**：`read` 读 /proc/cmdline、外部命令钉死绝对路径（/bin/mkdir、/bin/ln）。定位手段：分块 base64 放追踪副本到 /run 生成器目录 + daemon-reload |
+| 生成器/服务 "succeeded" 却毫无效果，或 oneshot 突然 failed 127 | systemd 以精简环境调生成器 **与一切 ExecStart 脚本** ，PATH 不含 busybox applet 目录（板上报 `cat: not found`、status 127）——此类脚本内 **不得经 PATH 解析外部命令** ：`read` 读文件、外部命令钉死绝对路径（/bin/mkdir、/usr/sbin/hwclock）。定位手段：分块 base64 放追踪副本到 /run 生成器目录 + daemon-reload，或 systemctl status 看退出码 |
 | sfdisk 后分区设备未出现 | 等 `udevadm settle`；总控已内置 |
 | ping 宿主不通但 NFS 挂载成功 | 宿主对 ICMP 不响应， **以挂载成功为准** ，不要因 ping 误判网络 |
 | 网卡名不对 | U009 已以 `.link` 钉名结案：主口恒 `eth0`（次口 `eth1`）；仅在未含钉名文件的旧镜像上才会见 `end1`/`end0` |
