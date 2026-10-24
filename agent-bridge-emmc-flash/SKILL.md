@@ -74,7 +74,7 @@ cat /tmp/job.log
 2. `mount | grep squashfs`——根 ro + `/usr/local`（p4）与 `/system`（p6）两笔 payload 挂载；
 3. `systemctl is-active usr-local.mount system.mount graphical.target camphora-shell`——全 active；
 4. `mmc part`——九分区枚举正常；
-5. 画面：agent-bridge-screenshot（eMMC 根先手工联网才有宿主可读路径：`ip link set end1 up; ip addr add 192.168.0.108/24 dev end1`，再 NFS 挂宿主目录作落盘路径）。
+5. 画面：agent-bridge-screenshot（网络配置落地后 eMMC 根 `eth0` 启动即得 DHCP 地址，NFS 挂宿主目录作落盘路径即可；networkd 未启用的旧镜像才需手工配址）。
 
 ## 排障
 
@@ -83,7 +83,7 @@ cat /tmp/job.log
 | 生成器/服务日志记 "succeeded" 但毫无效果 | systemd 以精简环境调生成器，PATH 不含 busybox applet 目录（板上报 `cat: not found`）——生成器脚本内 **不得经 PATH 解析外部命令**：`read` 读 /proc/cmdline、外部命令钉死绝对路径（/bin/mkdir、/bin/ln）。定位手段：分块 base64 放追踪副本到 /run 生成器目录 + daemon-reload |
 | sfdisk 后分区设备未出现 | 等 `udevadm settle`；总控已内置 |
 | ping 宿主不通但 NFS 挂载成功 | 宿主对 ICMP 不响应， **以挂载成功为准** ，不要因 ping 误判网络 |
-| 网卡名不对 | U009：udev 改名，主网口是 `end1`（原 eth0），`end0` 是次口——eMMC 根临时联网配 `end1` |
+| 网卡名不对 | U009 已以 `.link` 钉名结案：主口恒 `eth0`（次口 `eth1`）；仅在未含钉名文件的旧镜像上才会见 `end1`/`end0` |
 | cmp 校验 FAIL | 先查 `/images` 文件新旧（wc -c 尺寸对宿主）与目标槽位拼写 |
 | 命令执行不完整/出现续行提示 | 串口行编辑器限长，见上「文件传输：分块 base64」 |
 | 板上卡在 netboot 回不来 | eMMC 态 env 的 bootcmd 含 netboot 自动回落；拦停进 U-Boot 后 `run mmcboot` 可强制走 eMMC |
