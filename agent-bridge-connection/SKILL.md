@@ -1,9 +1,9 @@
 ---
 name: agent-bridge-connection
-description: 通过 Serial Port Terminal 插件的 AgentBridge（本地 TCP 端口）连接嵌入式设备的串口终端，建立通信、执行命令并读取输出。当需要与串口设备建立 AgentBridge 连接、了解命令收发/排错机制时使用。
+description: 通过 Serial Port Terminal 插件的 AgentBridge（本地 TCP 端口）连接嵌入式设备的串口终端，建立通信、执行命令并读取输出。当需要与串口设备建立 AgentBridge 连接、了解命令收发/排错机制时使用；需要跨命令持续捕获设备日志时，会指引改用 agent-bridge-mcp MCP 服务器。
 metadata:
   author: ziqiang.zhu
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # AgentBridge 连接（基础）
@@ -31,8 +31,10 @@ AgentBridge 由 VS Code 插件 **Serial Port Terminal** 提供，插件内置三
 ## 前置条件
 
 1. 已安装 VS Code 插件 **Serial Port Terminal** 并连接串口设备；
-2. 插件的 **AgentBridge** 已启动，默认端口 `2000`；
+2. 插件的 **AgentBridge** 已启动（默认端口 `2000`，实际以状态栏为准）；
 3. 设备已通过串口连接并上电。
+
+**状态栏是地址与模式的权威信号**：桥运行时 VS Code 状态栏常驻 `AgentBridge <host:port>`，点击可复制——端口可能与默认 `2000` 不同（插件支持候选端口列表，启动时用户选定）；`(read-only)` 后缀 = 只读模式（发送被丢弃，见注意事项第 14 条）；末尾 `· N` = 当前客户端数（见注意事项第 13 条）。拿不准地址/端口时，请用户提供状态栏上的地址。
 
 > 若 TCP 连接返回 `Connection refused`，先确认 Agent 与 VS Code 是否**在同一台机器**上：同机则说明 AgentBridge 未启动——**提示用户开启**；不同机（Agent 在虚拟机/远端主机，VS Code 在 Windows 宿主机，或经 Remote-SSH 连接使插件跑在客户端侧）则按下方「跨主机访问」章节处理，不要误判设备离线。
 
@@ -173,6 +175,8 @@ for ip in <候选IP…>; do timeout 3 bash -c "exec 3<>/dev/tcp/$ip/2000" 2>/dev
 10. **标记回显陷阱**：U-Boot 会回显整条命令行，因此命令行里的 `echo __MARK_END__` 会让 `__MARK_END__` 在命令真正执行前就出现在输出里。检测结束标记时**必须匹配「独占一行的 `__MARK_END__`」**（即其前面是 `\n` 或 `\r`），不要用简单的子串 `includes`/`== *"__MARK_END__"*`，否则会提前结束读取、只拿到半截输出。
 11. **输出按行推送、空闲补发**：AgentBridge 按行剥离并转发输出；行尾无换行的内容（shell/U-Boot 提示符等）会在静默 200ms 后自动补发。等待提示符或最终回显时，预留 ≥300ms 静默窗口再判定输出结束。
 12. **zsh 没有 `/dev/tcp`**：`/dev/tcp` 是 bash 特性；Agent 交互 shell 为 zsh 时，裸写 `exec 3<>/dev/tcp/…` 会报「没有那个文件或目录」——把原始收发序列包进 `bash <<'EOF' … EOF` 或写成脚本执行（`term*.sh`、`catch-uboot.sh` 均声明 bash）。
+13. **多客户端输入合并**：AgentBridge 支持多客户端同时连接，输出广播给所有客户端，但**所有客户端的输入合并转发到串口**——开始操作前确认没有其他 Agent/用户在同时发命令（状态栏 `· N` 可确认客户端数），避免输入交错。
+14. **只读模式静默丢发送**：用户开启 `agentBridge.readonly` 后，客户端发送的字节被丢弃、永不到达设备，且链路上**无法探测**——发送后无回显、设备无反应时先怀疑它。请用户确认状态栏地址是否带 `(read-only)` 后缀（或查插件设置）；关闭设置后需**重新开启 Agent Bridge** 才生效。
 
 ## 通用执行模式
 
@@ -198,6 +202,13 @@ bash .agents/skills/agent-bridge-connection/scripts/catch-uboot.sh <桥主机IP>
 
 dd 读取参数：用 `bs=512`/`bs=1024` 配 `count` 控制单次读量；`bs=1` 是逐字节系统调用，内核日志刷屏时吞吐不足、读取滞后于设备输出。
 
+## 日志连续性：连接窗口外的输出会丢失
+
+AgentBridge 的契约是**无客户端连接时串口数据直接丢弃，不做缓存与历史补发**。本 skill 的「按命令连接」模式（每次 `term*.sh`/`term.js` 新建连接、读完即断）意味着：**命令之间**设备自主输出的内容（内核异步日志、应用打印、启动倒计时）会永久丢失。应对：
+
+- 抓事件序列（重启、开机日志）走「事件式等待」，在**单次连接内**覆盖整个事件窗口；
+- 需要持续订阅、事后按游标补收、或多 Agent 各自无丢失读取时，改用配套 MCP 服务器 **agent-bridge-mcp**（持久订阅者 + 游标环形缓冲，消除连接窗口丢失；按其仓库 README 面向 Agent 的「安装流程」接入：<https://github.com/ziqiang-zhu/agent-bridge-mcp>；注意桥停止 / VS Code 关闭期间的输出同样不在其缓冲内）。
+
 ## 故障排查
 
 | 问题 | 可能原因 | 解决方法 |
@@ -214,3 +225,5 @@ dd 读取参数：用 `bs=512`/`bs=1024` 配 `count` 控制单次读量；`bs=1`
 | 复位/重连后收到旧 boot 残留 | 上一次连接断开后设备仍在后台继续 boot | 先发 `\r` 确认是否停在提示符再操作 |
 | 长循环像黑盒，不知板子到哪一步 / 回车是否生效 | 固定时长干等、无过程上报 | 按「事件式等待」：状态即时上报 + 标记即停；拦停直接用 `catch-uboot.sh` |
 | `exec 3<>/dev/tcp/…` 报「没有那个文件或目录」 | 交互 shell 是 zsh，无 `/dev/tcp` | 包进 `bash <<'EOF' … EOF` 或改用随附脚本（见注意事项第 12 条） |
+| 命令发出后无回显、设备无反应 | 桥处于只读模式（`agentBridge.readonly`），发送被静默丢弃 | 请用户确认状态栏地址是否带 `(read-only)`；关闭设置后**重新开启 Agent Bridge**（见注意事项第 14 条） |
+| 命令之间的异步输出（内核日志等）抓不到 | 裸 TCP 按命令连接，无客户端时段数据被丢弃、不补发 | 事件窗口走「事件式等待」单连接覆盖；持续订阅改用 agent-bridge-mcp（见「日志连续性」节） |
